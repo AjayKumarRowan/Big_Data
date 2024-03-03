@@ -48,10 +48,9 @@ class DataProcessor:
                 search_results.append({country: currency})
         return search_results
 
-# Example usage
 if __name__ == "__main__":
     processor = DataProcessor()
-    search_query = "ANG"  # Example search query
+    search_query = "ANG"  #  search query
     results = processor.search_by_country(search_query)
     if results:
         print(f"Search Results for '{search_query}':")
