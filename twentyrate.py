@@ -1,32 +1,55 @@
-import requests
+import json
+import redis
+import yaml
 
 class DataProcessor:
     """
     A class to process currency data.
     
     Attributes:
-    - api_url (str): The URL of the currency conversion API.
-    - api_key (str): The API key for accessing the currency conversion API.
-    - headers (dict): The headers required for making requests to the API.
+    - redis_config (dict): Configuration for connecting to the Redis database.
     """
 
-    api_url = "https://currency-conversion-and-exchange-rates.p.rapidapi.com/latest"
-    api_key = "0191caf90emshe2eff9a25e7212ep133f98jsn9f930db0d2cd"
+    def __init__(self, redis_config):
+        """
+        Initializes the DataProcessor object.
 
-    headers = {
-        "X-RapidAPI-Host": "currency-conversion-and-exchange-rates.p.rapidapi.com",
-        "X-RapidAPI-Key": api_key
-    }
+        Args:
+        - redis_config (dict): Configuration for connecting to the Redis database.
+        """
+        self.redis_config = redis_config
+        self.redis_client = redis.StrictRedis(
+            host=redis_config['host'],
+            port=redis_config['port'],
+            db=redis_config['db'],
+            password=redis_config.get('password')
+        )
 
-    response = requests.get(api_url, headers=headers)
+    def fetch_data_from_redis(self):
+        """
+        Fetches currency conversion data from Redis.
 
-    if response.status_code == 200:
-        data = response.json()
-        exchange_rates = data['rates']
+        Returns:
+        - dict: A dictionary containing the fetched currency conversion data.
+        """
+        currency_data = self.redis_client.hgetall("currency_data")
+        return {currency.decode(): json.loads(rate.decode()) for currency, rate in currency_data.items()}
 
-        # Print only rates below 20
-        for currency, rate in exchange_rates.items():
-            if rate < 20:
+if __name__ == "__main__":
+    # Load Redis configuration from YAML file
+    with open('config.yaml', 'r') as file:
+        config = yaml.safe_load(file)
+    
+    processor = DataProcessor(config['redis'])
+    data = processor.fetch_data_from_redis()
+    rates_data = data.get('rates', {})
+    if rates_data:
+        count = 0
+        for currency, rate in rates_data.items():
+            if int(rate) < 20:
                 print(f"{currency}: {rate}")
+                count += 1
+                if count == 20:
+                    break
     else:
-        print(f"Failed to fetch data from API: {response.status_code}")
+        print("Failed to fetch data from Redis.")

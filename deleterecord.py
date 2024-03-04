@@ -1,36 +1,43 @@
-import requests
+import yaml
+import redis
+import json
 
 class DataProcessor:
     """
-    A class to fetch, process, search, and delete currency exchange rates data from a RapidAPI endpoint.
-
+    A class to fetch and process currency exchange rates data from a Redis database.
+    
     Attributes:
-    - api_url (str): The URL of the RapidAPI endpoint to fetch the data from.
-    - api_key (str): The API key required for accessing the RapidAPI endpoint.
-    - headers (dict): The headers required for making the HTTP request to the RapidAPI endpoint.
-    - response (requests.Response): The response object obtained after making the HTTP request.
-    - data (dict): The JSON data obtained from the response.
-    - exchange_rates (dict): A dictionary containing the currency exchange rates data.
+    - redis_config (dict): Configuration for connecting to the Redis database.
+    - redis_client: A Redis client object used for interacting with the Redis database.
     """
 
-    api_url = "https://currency-conversion-and-exchange-rates.p.rapidapi.com/latest"
-    api_key = "0191caf90emshe2eff9a25e7212ep133f98jsn9f930db0d2cd"
-
-    headers = {
-        "X-RapidAPI-Host": "currency-conversion-and-exchange-rates.p.rapidapi.com",
-        "X-RapidAPI-Key": api_key
-    }
-
-    def __init__(self):
+    def __init__(self, redis_config_file):
         """
-        Initializes the DataProcessor object by fetching data from the RapidAPI endpoint.
+        Initializes the DataProcessor object.
+
+        Args:
+        - redis_config_file (str): Path to the YAML file containing Redis configuration.
         """
-        self.response = requests.get(self.api_url, headers=self.headers)
-        if self.response.status_code == 200:
-            self.data = self.response.json()
-            self.exchange_rates = self.data['rates']
-        else:
-            print(f"Failed to fetch data from API: {self.response.status_code}")
+        with open(redis_config_file, 'r') as file:
+            redis_config = yaml.safe_load(file)['redis']
+        
+        self.redis_config = redis_config
+        self.redis_client = redis.StrictRedis(
+            host=redis_config['host'],
+            port=redis_config['port'],
+            db=redis_config['db'],
+            password=redis_config.get('password')
+        )
+
+    def fetch_data_from_redis(self):
+        """
+        Fetches currency conversion data from Redis.
+
+        Returns:
+        - dict: A dictionary containing the fetched currency conversion data.
+        """
+        currency_data = self.redis_client.hgetall("currency_data")
+        return {currency.decode(): json.loads(rate.decode()) for currency, rate in currency_data.items()}
 
     def search_by_country(self, query):
         """
@@ -42,8 +49,10 @@ class DataProcessor:
         Returns:
         - list: A list of dictionaries containing the country code and its corresponding exchange rate.
         """
+        data = self.fetch_data_from_redis()
+        rates_data = data.get('rates', {})
         search_results = []
-        for country, currency in self.exchange_rates.items():
+        for country, currency in rates_data.items():
             if query.lower() in country.lower():
                 search_results.append({country: currency})
         return search_results
@@ -58,29 +67,32 @@ class DataProcessor:
         Returns:
         - list: A list of dictionaries containing the deleted country code and its corresponding exchange rate.
         """
+        data = self.fetch_data_from_redis()
+        rates_data = data.get('rates', {})
         deleted_records = []
-        for country in list(self.exchange_rates.keys()):
+        for country, currency in rates_data.items():
             if query.lower() in country.lower():
-                currency = self.exchange_rates.pop(country)
+                self.redis_client.hdel("currency_data", country)
                 deleted_records.append({country: currency})
         return deleted_records
 
 if __name__ == "__main__":
-    processor = DataProcessor()
+    redis_config_file = "config.yaml"
+    processor = DataProcessor(redis_config_file)
     search_query = "ANG"  # search query
     results = processor.search_by_country(search_query)
     if results:
         print(f"Search Results for '{search_query}':")
         for result in results:
             print(result)
-        
-        # Delete records
-        deleted_records = processor.delete_by_country(search_query)
-        if deleted_records:
-            print(f"Deleted records for '{search_query}':")
-            for record in deleted_records:
-                print(record)
-        else:
-            print(f"No records found for '{search_query}' to delete")
     else:
         print(f"No results found for '{search_query}'")
+
+    # Delete records
+    deleted_records = processor.delete_by_country(search_query)
+    if deleted_records:
+        print(f"Deleted records for '{search_query}':")
+        for record in deleted_records:
+            print(record)
+    else:
+        print(f"No records found for '{search_query}' to delete")
