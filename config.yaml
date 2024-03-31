@@ -1,6 +1,6 @@
 redis:
-  host: redis-17512.c251.east-us-mz.azure.cloud.redislabs.com
+  host: 
   db: 0
   user: default
-  password: aUbFuk8o7fYzuYo35RiGWl3xU4XF7KMz
+  password: 
   port: 17512
