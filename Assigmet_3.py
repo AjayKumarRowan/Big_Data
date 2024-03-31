@@ -54,7 +54,7 @@ class DataProcessor:
 
 if __name__ == "__main__":
     api_url = "https://currency-conversion-and-exchange-rates.p.rapidapi.com/latest"
-    api_key = "0191caf90emshe2eff9a25e7212ep133f98jsn9f930db0d2cd"
+    api_key = " "
 
     processor = DataProcessor(api_url, api_key)
     data = processor.fetch_data_from_api()
